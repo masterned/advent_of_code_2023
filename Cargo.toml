@@ -4,12 +4,13 @@ resolver = "2"
 members = [
   "day1",
   "day2",
+  "day3"
 ]
 
-default-members = ["day2"]
+default-members = ["day3"]
 
 [workspace.package]
 version = "0.12.0"
 authors = ["Spencer Dent <mr.spencerdent@gmail.com>"]
-description = "Code kata advent calendar solutions for 2022"
+description = "Code kata advent calendar solutions for 2023"
 edition = "2021"
