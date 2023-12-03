@@ -3,9 +3,10 @@ resolver = "2"
 
 members = [
   "day1",
+  "day2",
 ]
 
-default-members = ["day1"]
+default-members = ["day2"]
 
 [workspace.package]
 version = "0.12.0"
