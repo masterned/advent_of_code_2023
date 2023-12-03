@@ -92,6 +92,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Part 1: {valid_game_id_sum}");
 
+    let game_powers_sum: usize = games
+        .iter()
+        .map(|game| game.red * game.green * game.blue)
+        .sum();
+    println!("Part 2: {game_powers_sum}");
+
     Ok(())
 }
 
