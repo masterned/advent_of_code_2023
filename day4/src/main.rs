@@ -1,28 +1,14 @@
 #![warn(clippy::pedantic)]
 
-use std::{
-    error::Error,
-    fmt, fs,
-    str::{FromStr, Split},
-};
+use std::{error::Error, fmt, fs, str::FromStr};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Card {
-    pub number: usize,
     pub count: usize,
-    win_numbers: Vec<String>,
-    player_numbers: Vec<String>,
     pub win_count: usize,
 }
 
 impl Card {
-    pub fn count_wins(&self) -> usize {
-        self.player_numbers
-            .iter()
-            .filter(|n| self.win_numbers.contains(n))
-            .count()
-    }
-
     pub fn calculate_score(count: usize) -> usize {
         if count > 0 {
             1 << (count - 1)
@@ -35,10 +21,7 @@ impl Card {
 impl Default for Card {
     fn default() -> Self {
         Card {
-            number: 0,
             count: 1,
-            win_numbers: vec![],
-            player_numbers: vec![],
             win_count: 0,
         }
     }
@@ -59,40 +42,25 @@ impl FromStr for Card {
     type Err = ParseCardError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut split = s.split(':');
-        let number = split
+        let mut split = s.split(':').last().ok_or(ParseCardError())?.split('|');
+
+        let winning_numbers: Vec<_> = split
             .next()
             .ok_or(ParseCardError())?
             .split_whitespace()
-            .nth(1)
+            .collect();
+
+        let win_count = split
+            .next()
             .ok_or(ParseCardError())?
-            .parse::<usize>()
-            .map_err(|_| ParseCardError())?;
+            .split_whitespace()
+            .filter(|n| winning_numbers.contains(n))
+            .count();
 
-        let mut split = split.next().ok_or(ParseCardError())?.split('|');
-
-        let split_num_seq = |split: &mut Split<'_, char>| {
-            Ok(split
-                .next()
-                .ok_or(ParseCardError())?
-                .split_whitespace()
-                .map(ToString::to_string)
-                .collect())
-        };
-
-        let win_numbers = split_num_seq(&mut split)?;
-
-        let player_numbers = split_num_seq(&mut split)?;
-
-        let mut card = Card {
-            number,
-            win_numbers,
-            player_numbers,
+        Ok(Card {
+            win_count,
             ..Default::default()
-        };
-        card.win_count = card.count_wins();
-
-        Ok(card)
+        })
     }
 }
 
