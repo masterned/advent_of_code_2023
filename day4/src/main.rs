@@ -80,15 +80,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         .sum();
     println!("Part 1: {score_total:?}");
 
-    let mut multiplier = 1;
     for (i, win_count) in win_counts.iter().enumerate() {
+        let mut multiplier = 0;
+        if let Some(card) = cards.get(i) {
+            multiplier = card.count;
+        }
         for n in 0..*win_count {
             if let Some(card) = cards.get_mut(i + n + 1) {
                 card.count += multiplier;
             }
-        }
-        if let Some(card) = cards.get(i) {
-            multiplier += card.count;
         }
     }
     let card_count = cards.iter().map(|card| card.count).sum::<usize>();
