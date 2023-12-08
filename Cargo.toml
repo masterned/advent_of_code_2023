@@ -5,10 +5,11 @@ members = [
   "day1",
   "day2",
   "day3",
-  "day4"
+  "day4",
+  "day5"
 ]
 
-default-members = ["day4"]
+default-members = ["day5"]
 
 [workspace.package]
 version = "0.12.0"
