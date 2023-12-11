@@ -1,53 +1,23 @@
-use std::{error::Error, fmt, fs, str::FromStr};
+#![warn(clippy::pedantic)]
+
+use std::{error::Error, fmt, fs, ops::Range, str::FromStr};
 
 #[derive(Clone, Debug, Default)]
-struct Almanac {
+pub struct Almanac {
     seeds: Vec<usize>,
-    seed_to_soil: Vec<Mapping>,
-    soil_to_fertilizer: Vec<Mapping>,
-    fertilizer_to_water: Vec<Mapping>,
-    water_to_light: Vec<Mapping>,
-    light_to_temperature: Vec<Mapping>,
-    temperature_to_humidity: Vec<Mapping>,
-    humidity_to_location: Vec<Mapping>,
+    seed_ranges: Vec<Range<usize>>,
+    rules: Vec<Rule>,
 }
 
 impl Almanac {
     pub fn get_location(&self, seed_number: usize) -> usize {
-        let soil = self
-            .seed_to_soil
-            .iter()
-            .find_map(|m| m.apply(seed_number))
-            .unwrap_or(seed_number);
-        let fertilizer = self
-            .soil_to_fertilizer
-            .iter()
-            .find_map(|m| m.apply(soil))
-            .unwrap_or(soil);
-        let water = self
-            .fertilizer_to_water
-            .iter()
-            .find_map(|m| m.apply(fertilizer))
-            .unwrap_or(fertilizer);
-        let light = self
-            .water_to_light
-            .iter()
-            .find_map(|m| m.apply(water))
-            .unwrap_or(water);
-        let tempurature = self
-            .light_to_temperature
-            .iter()
-            .find_map(|m| m.apply(light))
-            .unwrap_or(light);
-        let humidity = self
-            .temperature_to_humidity
-            .iter()
-            .find_map(|m| m.apply(tempurature))
-            .unwrap_or(tempurature);
-        self.humidity_to_location
-            .iter()
-            .find_map(|m| m.apply(humidity))
-            .unwrap_or(humidity)
+        let mut result = seed_number;
+
+        for rule in &self.rules {
+            result = rule.apply_to_number(result);
+        }
+
+        result
     }
 
     pub fn get_closest_seed_location(&self) -> usize {
@@ -57,18 +27,49 @@ impl Almanac {
             .min()
             .unwrap_or(0)
     }
+
+    pub fn get_closest_location_of_seed_ranges(&self) -> usize {
+        self.seed_ranges
+            .iter()
+            .map(|seed_range| {
+                let mut min = self.get_location(seed_range.start);
+                for seed_number in seed_range.start..seed_range.end {
+                    min = min.min(self.get_location(seed_number));
+                }
+                min
+            })
+            .min()
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct ParseAlmanacError();
+pub enum ParseAlmanacError {
+    #[default]
+    MissingField,
+    RuleError,
+}
 
 impl fmt::Display for ParseAlmanacError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unable to parse Almanac")
+        write!(
+            f,
+            "Unable to parse Almanac: {}",
+            match self {
+                ParseAlmanacError::MissingField => "missing field",
+                ParseAlmanacError::RuleError => "unable to parse rule",
+            }
+        )
     }
 }
 
 impl Error for ParseAlmanacError {}
+
+impl From<ParseRuleError> for ParseAlmanacError {
+    fn from(_value: ParseRuleError) -> Self {
+        Self::RuleError
+    }
+}
 
 impl FromStr for Almanac {
     type Err = ParseAlmanacError;
@@ -76,88 +77,25 @@ impl FromStr for Almanac {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut almanac = Almanac::default();
 
-        let mut lines = s.lines();
+        let mut sections = s.split("\n\n");
 
-        let seeds_line = lines.next().ok_or(ParseAlmanacError())?;
+        let seeds_line = sections.next().ok_or(ParseAlmanacError::default())?;
 
         let seeds: Vec<_> = seeds_line
             .split_whitespace()
             .filter_map(|s| s.parse::<usize>().ok())
             .collect();
+        let seed_ranges = seeds.clone();
         almanac.seeds = seeds;
 
-        let _ = lines.nth(1);
+        let seed_ranges: Vec<Range<usize>> = seed_ranges
+            .chunks_exact(2)
+            .map(|a| a[0]..a[0] + a[1])
+            .collect();
+        almanac.seed_ranges = seed_ranges;
 
-        let mut seed_to_soil = lines.next().ok_or(ParseAlmanacError())?;
-        while !seed_to_soil.is_empty() {
-            let mapping: Mapping = seed_to_soil.parse().map_err(|_| ParseAlmanacError())?;
-            almanac.seed_to_soil.push(mapping);
-            seed_to_soil = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut soil_to_fertilizer = lines.next().ok_or(ParseAlmanacError())?;
-        while !soil_to_fertilizer.is_empty() {
-            let mapping: Mapping = soil_to_fertilizer
-                .parse()
-                .map_err(|_| ParseAlmanacError())?;
-            almanac.soil_to_fertilizer.push(mapping);
-            soil_to_fertilizer = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut fertilizer_to_water = lines.next().ok_or(ParseAlmanacError())?;
-        while !fertilizer_to_water.is_empty() {
-            let mapping: Mapping = fertilizer_to_water
-                .parse()
-                .map_err(|_| ParseAlmanacError())?;
-            almanac.fertilizer_to_water.push(mapping);
-            fertilizer_to_water = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut water_to_light = lines.next().ok_or(ParseAlmanacError())?;
-        while !water_to_light.is_empty() {
-            let mapping: Mapping = water_to_light.parse().map_err(|_| ParseAlmanacError())?;
-            almanac.water_to_light.push(mapping);
-            water_to_light = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut light_to_temperature = lines.next().ok_or(ParseAlmanacError())?;
-        while !light_to_temperature.is_empty() {
-            let mapping: Mapping = light_to_temperature
-                .parse()
-                .map_err(|_| ParseAlmanacError())?;
-            almanac.light_to_temperature.push(mapping);
-            light_to_temperature = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut temperature_to_humidity = lines.next().ok_or(ParseAlmanacError())?;
-        while !temperature_to_humidity.is_empty() {
-            let mapping: Mapping = temperature_to_humidity
-                .parse()
-                .map_err(|_| ParseAlmanacError())?;
-            almanac.temperature_to_humidity.push(mapping);
-            temperature_to_humidity = lines.next().ok_or(ParseAlmanacError())?;
-        }
-
-        let _ = lines.next();
-
-        let mut humidity_to_location = lines.next();
-        while humidity_to_location.is_some() {
-            let mapping: Mapping = humidity_to_location
-                .ok_or(ParseAlmanacError())?
-                .parse()
-                .map_err(|_| ParseAlmanacError())?;
-            almanac.humidity_to_location.push(mapping);
-            humidity_to_location = lines.next();
+        for section in sections {
+            almanac.rules.push(section.parse()?);
         }
 
         Ok(almanac)
@@ -180,19 +118,8 @@ impl Mapping {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct ParseMappingError();
-
-impl fmt::Display for ParseMappingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unable to parse Mapping")
-    }
-}
-
-impl Error for ParseMappingError {}
-
 impl FromStr for Mapping {
-    type Err = ParseMappingError;
+    type Err = ParseRuleError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let split: Vec<_> = s
@@ -201,14 +128,14 @@ impl FromStr for Mapping {
             .collect();
 
         if split.len() != 3 {
-            return Err(ParseMappingError());
+            return Err(ParseRuleError());
         }
 
         let mut split = split.iter();
 
-        let destination = *split.next().ok_or(ParseMappingError())?;
-        let source = *split.next().ok_or(ParseMappingError())?;
-        let range_length = *split.next().ok_or(ParseMappingError())?;
+        let destination = *split.next().ok_or(ParseRuleError())?;
+        let source = *split.next().ok_or(ParseRuleError())?;
+        let range_length = *split.next().ok_or(ParseRuleError())?;
 
         Ok(Mapping {
             destination,
@@ -218,14 +145,63 @@ impl FromStr for Mapping {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct Rule(Vec<Mapping>);
+
+impl Rule {
+    pub fn apply_to_number(&self, number: usize) -> usize {
+        self.0
+            .iter()
+            .find_map(|m| m.apply(number))
+            .unwrap_or(number)
+    }
+}
+
+impl From<Vec<Mapping>> for Rule {
+    fn from(value: Vec<Mapping>) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ParseRuleError();
+
+impl fmt::Display for ParseRuleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unable to parse Rule")
+    }
+}
+
+impl Error for ParseRuleError {}
+
+impl FromStr for Rule {
+    type Err = ParseRuleError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut rule = vec![];
+        let mut lines = s.lines();
+
+        let _title = lines.next();
+
+        for line in lines {
+            rule.push(line.parse()?);
+        }
+
+        Ok(Self(rule))
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = fs::read_to_string("data/day5")?;
+    let input = fs::read_to_string("data/ex5")?;
 
     let almanac: Almanac = input.parse()?;
+    // println!("{almanac:?}");
 
     let closest_location = almanac.get_closest_seed_location();
-
     println!("Part 1: {closest_location}");
+
+    let closest_range_location = almanac.get_closest_location_of_seed_ranges();
+    println!("Part 2: {closest_range_location}");
 
     Ok(())
 }
